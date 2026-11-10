@@ -1,0 +1,9 @@
+# Werewolves Game Dependencies
+# Python 3.8+
+
+# Core async support (built-in, but listed for clarity)
+# asyncio - included in Python standard library
+
+# Optional: for testing
+pytest>=7.0
+pytest-asyncio>=0.21.0

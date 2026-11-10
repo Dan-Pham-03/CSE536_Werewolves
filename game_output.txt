@@ -1,0 +1,40 @@
+mkdir -p sockets logs
+Directories created
+bash bin/run_game.sh 4 1
+bin/run_game.sh: line 3: $'\r': command not found
+bin/run_game.sh: line 4: set: -: invalid option
+set: usage: set [-abefhkmnptuvxBCHP] [-o option-name] [--] [arg ...]
+bin/run_game.sh: line 5: $'\r': command not found
+bin/run_game.sh: line 13: $'\r': command not found
+bin/run_game.sh: line 16: $'\r': command not found
+bin/run_game.sh: line 19: $'\r': command not found
+==========================================
+Werewolves Game - Unix Domain Sockets
+==========================================
+Players: 4
+Werewolves: 1
+Socket Dir: /home/vboxuser/werewolves-uds/sockets
+Log Dir: /home/vboxuser/werewolves-uds/logs
+==========================================
+
+bin/run_game.sh: line 29: $'\r': command not found
+[*] Starting game server...
+bin/run_game.sh: line 32: cd: $'/home/vboxuser/werewolves-uds\r\r': No such file or directory
+usage: game_server.py [-h] [--socket SOCKET] [--players PLAYERS]
+                      [--werewolves WEREWOLVES] [--log-dir LOG_DIR]
+game_server.py: error: unrecognized arguments: 
+bin/run_game.sh: line 34: --socket: command not found
+bin/run_game.sh: line 35: --players: command not found
+bin/run_game.sh: line 36: --werewolves: command not found
+bin/run_game.sh: line 37: --log-dir: command not found
+bin/run_game.sh: line 37: $'\r': command not found
+bin/run_game.sh: line 38: $'\r': command not found
+[+] Server started (PID: 4163)
+bin/run_game.sh: line 41: $'\r': command not found
+sleep: invalid time interval ‘1\r’
+Try 'sleep --help' for more information.
+bin/run_game.sh: line 44: $'\r': command not found
+[*] Starting players...
+bin/run_game.sh: line 47: syntax error near unexpected token `$'do\r''
+bin/run_game.sh: line 47: `for ((i=1; i<=NUM_PLAYERS; i++)); do'
+make: *** [Makefile:20: run] Error 2

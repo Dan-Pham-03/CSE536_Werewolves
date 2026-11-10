@@ -1,0 +1,14 @@
+{
+  "server": {
+    "socket_path": "sockets/game_server.sock",
+    "listen_backlog": 10
+  },
+  "client": {
+    "connection_timeout": 10,
+    "message_timeout": 5
+  },
+  "buffer": {
+    "max_message_size": 4096,
+    "recv_buffer_size": 1024
+  }
+}
