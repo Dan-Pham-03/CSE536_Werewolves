@@ -6,6 +6,7 @@ Individual player process that connects to the game server.
 import asyncio
 import logging
 import os
+import random
 import sys
 from typing import Optional
 
@@ -18,7 +19,7 @@ from comms import UDSClient, Message, MessageType
 class WerewolvesPlayer:
     """Represents a single player in the game."""
 
-    def __init__(self, player_id: str, socket_path: str, log_dir: str = "logs"):
+    def __init__(self, player_id: str, socket_path: str, log_dir: str = "logs", interactive: bool = False):
         """
         Initialize the player.
 
@@ -26,10 +27,12 @@ class WerewolvesPlayer:
             player_id: Unique player identifier
             socket_path: Path to game server socket
             log_dir: Directory for logs
+            interactive: Prompt for choices instead of selecting randomly
         """
         self.player_id = player_id
         self.socket_path = socket_path
         self.log_dir = log_dir
+        self.interactive = interactive
         self.role: Optional[str] = None
         self.is_alive = True
         self.logger = self._setup_logger()
@@ -106,10 +109,10 @@ class WerewolvesPlayer:
         self.logger.info(f"Night action requested: {action}")
         print(f"\n[{self.player_id}] Select a target: {targets}")
 
-        # Simple AI: randomly select a target
         if targets:
-            import random
-            target = random.choice(targets)
+            target = await self._choose_target("Target", targets)
+            if target is None:
+                return
             self.logger.info(f"Selected target: {target}")
 
             # Send action
@@ -130,10 +133,10 @@ class WerewolvesPlayer:
         self.logger.info(f"Vote requested from targets: {targets}")
         print(f"\n[{self.player_id}] Cast your vote from: {targets}")
 
-        # Simple AI: randomly vote
         if targets:
-            import random
-            vote_for = random.choice(targets)
+            vote_for = await self._choose_target("Vote", targets)
+            if vote_for is None:
+                return
             self.logger.info(f"Voting for: {vote_for}")
 
             # Send vote
@@ -145,6 +148,26 @@ class WerewolvesPlayer:
             )
             await self.client.send_message(vote_msg)
             print(f"[{self.player_id}] Voted for: {vote_for}")
+
+    async def _choose_target(self, prompt: str, targets: list) -> Optional[str]:
+        if not self.interactive:
+            return random.choice(targets)
+
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                target = await loop.run_in_executor(
+                    None,
+                    input,
+                    f"[{self.player_id}] {prompt} ({', '.join(targets)}): "
+                )
+            except EOFError:
+                self.logger.warning("No terminal input available for choice")
+                return None
+
+            if target in targets:
+                return target
+            print(f"Please enter one of: {', '.join(targets)}")
 
     async def _handle_eliminate(self, message: Message):
         """Handle elimination notification."""
@@ -185,13 +208,15 @@ async def main():
     parser.add_argument("player_id", help="Player ID")
     parser.add_argument("--socket", default="sockets/game_server.sock", help="Socket path")
     parser.add_argument("--log-dir", default="logs", help="Log directory")
+    parser.add_argument("--interactive", action="store_true", help="Prompt for choices in this terminal")
 
     args = parser.parse_args()
 
     player = WerewolvesPlayer(
         player_id=args.player_id,
         socket_path=args.socket,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
+        interactive=args.interactive
     )
 
     try:

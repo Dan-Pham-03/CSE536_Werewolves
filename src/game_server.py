@@ -21,7 +21,7 @@ from game_logic import GameState, GamePhase, PlayerRole
 class WerewolvesGameServer:
     """Main game server orchestrating the Werewolves game."""
 
-    def __init__(self, socket_path: str, num_players: int = 4, num_werewolves: int = 1, log_dir: str = "logs"):
+    def __init__(self, socket_path: str, num_players: int = 4, num_werewolves: int = 1, log_dir: str = "logs", interactive: bool = False):
         """
         Initialize the game server.
 
@@ -30,12 +30,22 @@ class WerewolvesGameServer:
             num_players: Number of players expected
             num_werewolves: Number of werewolves
             log_dir: Directory for logs
+            interactive: Allow discussion and wait for terminal choices
         """
         self.socket_path = socket_path
         self.num_players = num_players
         self.num_werewolves = num_werewolves
+        self.interactive = interactive
+        self.action_timeout = 120
+        self.discussion_seconds = 30
         self.game_state = GameState(num_werewolves=num_werewolves)
         self.log_dir = log_dir
+        self._expected_night_actions = set()
+        self._received_night_actions = set()
+        self._night_actions_complete = asyncio.Event()
+        self._expected_votes = set()
+        self._received_votes = set()
+        self._votes_complete = asyncio.Event()
 
         # Setup logging
         os.makedirs(log_dir, exist_ok=True)
@@ -102,6 +112,10 @@ class WerewolvesGameServer:
 
         self.logger.debug(f"Player {voter_id} votes for {votee_id}")
         self.game_state.record_vote(voter_id, votee_id)
+        if self.interactive and voter_id in self._expected_votes:
+            self._received_votes.add(voter_id)
+            if self._expected_votes.issubset(self._received_votes):
+                self._votes_complete.set()
 
     async def _handle_night_action(self, message: Message):
         """Handle werewolf night action."""
@@ -110,6 +124,10 @@ class WerewolvesGameServer:
 
         self.logger.debug(f"Werewolf {werewolf_id} targets {victim_id} for elimination")
         self.game_state.record_night_action(werewolf_id, victim_id)
+        if self.interactive and werewolf_id in self._expected_night_actions:
+            self._received_night_actions.add(werewolf_id)
+            if self._expected_night_actions.issubset(self._received_night_actions):
+                self._night_actions_complete.set()
 
     async def start_game(self):
         """Start the game."""
@@ -168,6 +186,9 @@ class WerewolvesGameServer:
         # Ask werewolves for their targets
         werewolves = self.game_state.get_alive_werewolves()
         alive_villagers = self.game_state.get_alive_villagers()
+        self._expected_night_actions = {player.player_id for player in werewolves}
+        self._received_night_actions.clear()
+        self._night_actions_complete.clear()
 
         for werewolf in werewolves:
             action_msg = Message(
@@ -181,8 +202,17 @@ class WerewolvesGameServer:
             )
             await self.comm_server.send_message(action_msg)
 
-        # Wait for night actions (with timeout)
-        await asyncio.sleep(5)  # Simplified: wait 5 seconds for actions
+        if self.interactive:
+            if self._expected_night_actions:
+                try:
+                    await asyncio.wait_for(
+                        self._night_actions_complete.wait(),
+                        timeout=self.action_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning("Timed out waiting for night actions")
+        else:
+            await asyncio.sleep(5)
 
         # Resolve night actions
         self.game_state.resolve_night_actions()
@@ -199,8 +229,7 @@ class WerewolvesGameServer:
         await self._broadcast_phase_change("DAY")
         await self._broadcast_game_state()
 
-        # Wait for discussion (simplified)
-        await asyncio.sleep(3)
+        await asyncio.sleep(self.discussion_seconds if self.interactive else 3)
 
         self.game_state.phase = GamePhase.VOTING
 
@@ -210,10 +239,14 @@ class WerewolvesGameServer:
 
         # Reset votes
         self.game_state.reset_votes()
+        alive_players = self.game_state.get_alive_players()
+        self._expected_votes = {player.player_id for player in alive_players}
+        self._received_votes.clear()
+        self._votes_complete.clear()
 
         # Ask all alive players to vote
-        for player in self.game_state.get_alive_players():
-            other_alive = [p.player_id for p in self.game_state.get_alive_players() 
+        for player in alive_players:
+            other_alive = [p.player_id for p in alive_players
                           if p.player_id != player.player_id]
             vote_msg = Message(
                 msg_type=MessageType.VOTE.value,
@@ -226,8 +259,17 @@ class WerewolvesGameServer:
             )
             await self.comm_server.send_message(vote_msg)
 
-        # Wait for votes
-        await asyncio.sleep(5)
+        if self.interactive:
+            if self._expected_votes:
+                try:
+                    await asyncio.wait_for(
+                        self._votes_complete.wait(),
+                        timeout=self.action_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning("Timed out waiting for votes")
+        else:
+            await asyncio.sleep(5)
 
         self.game_state.phase = GamePhase.RESULTS
 
@@ -311,6 +353,7 @@ async def main():
     parser.add_argument("--players", type=int, default=4, help="Number of players")
     parser.add_argument("--werewolves", type=int, default=1, help="Number of werewolves")
     parser.add_argument("--log-dir", default="logs", help="Log directory")
+    parser.add_argument("--interactive", action="store_true", help="Allow discussion and wait for player choices")
 
     args = parser.parse_args()
 
@@ -318,7 +361,8 @@ async def main():
         socket_path=args.socket,
         num_players=args.players,
         num_werewolves=args.werewolves,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
+        interactive=args.interactive
     )
 
     try:
