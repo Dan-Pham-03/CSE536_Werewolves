@@ -35,6 +35,7 @@ class WerewolvesPlayer:
         self.interactive = interactive
         self.role: Optional[str] = None
         self.is_alive = True
+        self._shutdown_event = asyncio.Event()
         self.logger = self._setup_logger()
 
         # Create communications client
@@ -43,6 +44,8 @@ class WerewolvesPlayer:
             client_id=player_id,
             log_file=os.path.join(log_dir, f"player_{player_id}.log")
         )
+        self._original_client_disconnect = self.client.disconnect
+        self.client.disconnect = self._disconnect_client_wrapper
 
         # Register message handlers
         self._register_handlers()
@@ -52,6 +55,11 @@ class WerewolvesPlayer:
         os.makedirs(self.log_dir, exist_ok=True)
         logger = logging.getLogger(f"Player-{self.player_id}")
         logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
 
         fh = logging.FileHandler(os.path.join(self.log_dir, f"player_{self.player_id}.log"))
         ch = logging.StreamHandler()
@@ -189,9 +197,15 @@ class WerewolvesPlayer:
 
     async def _handle_win(self, message: Message):
         """Handle game end."""
-        winner = message.payload.get("winner")
+        winner = message.payload.get("winner") or "unknown"
         self.logger.info(f"GAME OVER! {winner} WIN!")
         print(f"\n[{self.player_id}] *** GAME OVER! {winner.upper()} WIN! ***")
+        self._shutdown_event.set()
+
+    async def _disconnect_client_wrapper(self):
+        """Stop the player loop when the client disconnects."""
+        self._shutdown_event.set()
+        await self._original_client_disconnect()
 
     async def connect(self) -> bool:
         """Connect to the game server."""
@@ -199,16 +213,16 @@ class WerewolvesPlayer:
         return await self.client.connect(timeout=10.0)
 
     async def run(self):
-        """Run the player."""
+        """Run the player until the game ends or the connection closes."""
         if not await self.connect():
             self.logger.error("Failed to connect to server")
             return
 
-        # Keep running until game ends
         try:
-            await asyncio.sleep(float('inf'))
+            await self._shutdown_event.wait()
         except KeyboardInterrupt:
             self.logger.info("Player shutting down")
+        finally:
             await self.client.disconnect()
 
 

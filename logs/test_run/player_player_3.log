@@ -1,0 +1,11 @@
+2026-11-13 17:16:49,660 - Player-player_3 - INFO - Connecting to sockets/test_game.sock
+2026-11-13 17:16:49,662 - UDSClient-player_3 - INFO - Connected to server at sockets/test_game.sock
+2026-11-13 17:16:49,663 - UDSClient-player_3 - DEBUG - Message sent: HELLO
+2026-11-13 17:16:49,667 - UDSClient-player_3 - DEBUG - Message received: ROLE_ASSIGNMENT from SERVER
+2026-11-13 17:16:49,667 - Player-player_3 - INFO - Role assigned: VILLAGER (4 players, 1 werewolves)
+2026-11-13 17:16:49,668 - UDSClient-player_3 - DEBUG - Message received: PHASE_CHANGE from SERVER
+2026-11-13 17:16:49,669 - Player-player_3 - INFO - Phase changed to NIGHT (Round 1)
+2026-11-13 17:16:54,680 - UDSClient-player_3 - DEBUG - Message received: PHASE_CHANGE from SERVER
+2026-11-13 17:16:54,680 - Player-player_3 - INFO - Phase changed to DAY (Round 1)
+2026-11-13 17:16:54,680 - UDSClient-player_3 - DEBUG - Message received: GAME_STATE from SERVER
+2026-11-13 17:16:54,680 - Player-player_3 - DEBUG - Game state: {'phase': 'DAY', 'current_round': 1, 'players': {'player_1': {'role': 'WEREWOLF', 'is_alive': True, 'voted_for': None}, 'player_2': {'role': 'VILLAGER', 'is_alive': False, 'voted_for': None}, 'player_4': {'role': 'SEER', 'is_alive': True, 'voted_for': None}, 'player_3': {'role': 'VILLAGER', 'is_alive': True, 'voted_for': None}}, 'eliminated_players': ['player_2'], 'num_alive': 3, 'num_werewolves': 1}

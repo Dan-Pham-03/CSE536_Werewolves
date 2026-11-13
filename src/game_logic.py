@@ -147,7 +147,7 @@ class GameState:
         votes = self.get_vote_count()
         if not votes:
             return None
-        return max(votes, key=votes.get)
+        return max(votes, key=lambda player_id: votes[player_id])
 
     def check_win_condition(self) -> Optional[str]:
         """
@@ -180,7 +180,10 @@ class GameState:
 
         # Get most voted victim (with tie-breaking)
         if elimination_votes:
-            victim = max(elimination_votes, key=elimination_votes.get)
+            victim = max(
+                elimination_votes,
+                key=lambda player_id: elimination_votes[player_id]
+            )
 
             self.eliminate_player(victim)
 

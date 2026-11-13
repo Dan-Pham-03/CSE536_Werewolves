@@ -1,0 +1,15 @@
+2026-11-13 17:16:49,613 - GameServer - INFO - Player player_1 connected
+2026-11-13 17:16:49,645 - GameServer - INFO - Player player_2 connected
+2026-11-13 17:16:49,663 - GameServer - INFO - Player player_4 connected
+2026-11-13 17:16:49,663 - GameServer - INFO - Player player_3 connected
+2026-11-13 17:16:49,664 - GameServer - INFO - All players connected, starting game
+2026-11-13 17:16:49,664 - GameServer - INFO - Assigning roles...
+2026-11-13 17:16:49,664 - GameServer - INFO - Assigned role WEREWOLF to player_1
+2026-11-13 17:16:49,664 - GameServer - INFO - Assigned role VILLAGER to player_2
+2026-11-13 17:16:49,666 - GameServer - INFO - Assigned role SEER to player_4
+2026-11-13 17:16:49,667 - GameServer - INFO - Assigned role VILLAGER to player_3
+2026-11-13 17:16:49,667 - GameServer - INFO - --- NIGHT 1 ---
+2026-11-13 17:16:49,673 - GameServer - INFO - Seer player_4 investigated a player
+2026-11-13 17:16:49,673 - GameServer - DEBUG - Werewolf player_1 targets player_2 for elimination
+2026-11-13 17:16:54,676 - GameServer - INFO - Eliminated: None
+2026-11-13 17:16:54,676 - GameServer - INFO - --- DAY 1 ---

@@ -1,0 +1,12 @@
+2026-11-13 17:16:48,464 - UDSComms - INFO - Server started on sockets/test_game.sock
+2026-11-13 17:16:49,613 - UDSComms - INFO - Client connected: player_1
+2026-11-13 17:16:49,644 - UDSComms - INFO - Client connected: player_2
+2026-11-13 17:16:49,663 - UDSComms - INFO - Client connected: player_4
+2026-11-13 17:16:49,663 - UDSComms - INFO - Client connected: player_3
+2026-11-13 17:16:49,664 - UDSComms - DEBUG - Message sent to player_1: ROLE_ASSIGNMENT
+2026-11-13 17:16:49,664 - UDSComms - DEBUG - Message sent to player_2: ROLE_ASSIGNMENT
+2026-11-13 17:16:49,666 - UDSComms - DEBUG - Message sent to player_4: ROLE_ASSIGNMENT
+2026-11-13 17:16:49,667 - UDSComms - DEBUG - Message sent to player_3: ROLE_ASSIGNMENT
+2026-11-13 17:16:49,668 - UDSComms - DEBUG - Message sent to player_1: NIGHT_ACTION
+2026-11-13 17:16:49,669 - UDSComms - DEBUG - Message sent to player_4: NIGHT_ACTION
+2026-11-13 17:16:49,673 - UDSComms - DEBUG - Message sent to player_4: SEER_RESULT
