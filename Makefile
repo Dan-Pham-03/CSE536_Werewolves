@@ -17,7 +17,7 @@ setup:
 	@echo "Directories created"
 
 run: setup
-	bash bin/run_game.sh 4 1
+	bash bin/run_game.sh 4
 
 run-players: setup
 	bash bin/run_game.sh $(NUM) $(WEREWOLVES)

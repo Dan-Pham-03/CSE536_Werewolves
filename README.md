@@ -194,7 +194,7 @@ python3 -c "import sys; sys.path.insert(0, 'src'); from comms import UDSServer; 
 
 ### Option 1: Quick Start (Recommended)
 
-Start a game with 4 players and 1 werewolf:
+Start a game with 4 players. The roster calculator assigns 1 werewolf, 1 seer, and 2 villagers:
 
 ```
 cd werewolves-uds
@@ -223,10 +223,7 @@ Log Dir: /home/user/werewolves-uds/logs
 
 Game running... (Press Ctrl+C to stop)
 
-[player_1] Your role: WEREWOLF
-[player_2] Your role: VILLAGER
-[player_3] Your role: VILLAGER
-[player_4] Your role: VILLAGER
+Each player sees their own randomly assigned role. The roster contains one WEREWOLF, one SEER, and two VILLAGER roles.
 
 [player_1] === NIGHT PHASE (Round 1) ===
 [player_1] Select a target: ['player_2', 'player_3', 'player_4']
@@ -236,8 +233,8 @@ Game running... (Press Ctrl+C to stop)
 ### Option 2: Custom Player Count
 
 ```
-# Run with 6 players and 2 werewolves
-make run-players NUM=6 WEREWOLVES=2
+# Run with 8 players and 2 werewolves (the automatic count)
+make run-players NUM=8
 ```
 
 ### Option 3: Manual Control (For Testing/Development)
@@ -245,19 +242,15 @@ make run-players NUM=6 WEREWOLVES=2
 **Terminal 1 - Start Server:**
 ```
 cd werewolves-uds
-python3 src/game_server.py \
-    --socket sockets/game_server.sock \
-    --players 4 \
-    --werewolves 1 \
-    --log-dir logs
+python3 src/game_server.py --socket sockets/game_server.sock --players 4 --log-dir logs --interactive
 ```
 
 **Terminals 2-5 - Start Players (one per terminal):**
 ```
-python3 src/player.py player_1 --socket sockets/game_server.sock --log-dir logs
-python3 src/player.py player_2 --socket sockets/game_server.sock --log-dir logs
-python3 src/player.py player_3 --socket sockets/game_server.sock --log-dir logs
-python3 src/player.py player_4 --socket sockets/game_server.sock --log-dir logs
+python3 src/player.py player_1 --socket sockets/game_server.sock --log-dir logs --interactive
+python3 src/player.py player_2 --socket sockets/game_server.sock --log-dir logs --interactive
+python3 src/player.py player_3 --socket sockets/game_server.sock --log-dir logs --interactive
+python3 src/player.py player_4 --socket sockets/game_server.sock --log-dir logs --interactive
 ```
 
 **Terminal 6 - Monitor Logs:**
@@ -274,7 +267,7 @@ tail -f logs/player_1.log  # Watch specific player
 ### Phases
 
 1. **SETUP** - Server assigns roles randomly to all players
-2. **NIGHT** - Werewolves are asked to select a victim (unicast to werewolves only)
+2. **NIGHT** - Werewolves select a victim; the Seer investigates one living player and privately learns whether they are a werewolf
 3. **DAY** - All players are notified of elimination results (broadcast)
 4. **VOTING** - All alive players are asked to vote (unicast vote requests to each player)
 5. **RESULTS** - Vote result is announced (broadcast elimination)
@@ -285,6 +278,12 @@ tail -f logs/player_1.log  # Watch specific player
 
 - **Werewolves win:** Equal or outnumber villagers
 - **Villagers win:** All werewolves eliminated
+
+## Role Balance
+
+The role calculator requires at least 4 players, assigns one Seer, and fills the remaining slots with villagers. Werewolves default to one per four players, rounded down with a minimum of one (for example, 1 at 4-7 players and 2 at 8-11). An explicit `--werewolves` value may lower that count but cannot exceed the calculated limit.
+
+In interactive games, run the server and each player in separate terminals with `--interactive`. Only the Seer terminal receives the investigation result.
 
 ## Communication Patterns
 

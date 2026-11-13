@@ -9,7 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SOCKET_DIR="$PROJECT_ROOT/sockets"
 LOG_DIR="$PROJECT_ROOT/logs"
 NUM_PLAYERS=${1:-4}
-NUM_WEREWOLVES=${2:-1}
+NUM_WEREWOLVES=${2:-}
 
 # Create directories
 mkdir -p "$SOCKET_DIR" "$LOG_DIR"
@@ -21,7 +21,7 @@ echo "=========================================="
 echo "Werewolves Game - Unix Domain Sockets"
 echo "=========================================="
 echo "Players: $NUM_PLAYERS"
-echo "Werewolves: $NUM_WEREWOLVES"
+echo "Werewolves: ${NUM_WEREWOLVES:-auto}"
 echo "Socket Dir: $SOCKET_DIR"
 echo "Log Dir: $LOG_DIR"
 echo "=========================================="
@@ -30,11 +30,15 @@ echo ""
 # Start game server
 echo "[*] Starting game server..."
 cd "$PROJECT_ROOT"
-python3 src/game_server.py \
-    --socket "$SOCKET_DIR/game_server.sock" \
-    --players "$NUM_PLAYERS" \
-    --werewolves "$NUM_WEREWOLVES" \
-    --log-dir "$LOG_DIR" &
+SERVER_ARGS=(
+    --socket "$SOCKET_DIR/game_server.sock"
+    --players "$NUM_PLAYERS"
+    --log-dir "$LOG_DIR"
+)
+if [[ -n "$NUM_WEREWOLVES" ]]; then
+    SERVER_ARGS+=(--werewolves "$NUM_WEREWOLVES")
+fi
+python3 src/game_server.py "${SERVER_ARGS[@]}" &
 
 SERVER_PID=$!
 echo "[+] Server started (PID: $SERVER_PID)"

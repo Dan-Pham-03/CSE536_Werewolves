@@ -73,6 +73,7 @@ class WerewolvesPlayer:
         self.client.register_handler(MessageType.PHASE_CHANGE.value, self._handle_phase_change)
         self.client.register_handler(MessageType.GAME_STATE.value, self._handle_game_state)
         self.client.register_handler(MessageType.NIGHT_ACTION.value, self._handle_night_action)
+        self.client.register_handler(MessageType.SEER_RESULT.value, self._handle_seer_result)
         self.client.register_handler(MessageType.VOTE.value, self._handle_vote)
         self.client.register_handler(MessageType.ELIMINATE.value, self._handle_eliminate)
         self.client.register_handler(MessageType.WIN.value, self._handle_win)
@@ -107,7 +108,8 @@ class WerewolvesPlayer:
         targets = message.payload.get("available_targets")
 
         self.logger.info(f"Night action requested: {action}")
-        print(f"\n[{self.player_id}] Select a target: {targets}")
+        prompt = "Investigate" if action == "investigate" else "Select a target"
+        print(f"\n[{self.player_id}] {prompt}: {targets}")
 
         if targets:
             target = await self._choose_target("Target", targets)
@@ -116,14 +118,24 @@ class WerewolvesPlayer:
             self.logger.info(f"Selected target: {target}")
 
             # Send action
+            payload = (
+                {"action": "investigate", "target": target}
+                if action == "investigate"
+                else {"victim": target}
+            )
             action_msg = Message(
                 msg_type=MessageType.NIGHT_ACTION.value,
                 sender=self.player_id,
                 recipient="SERVER",
-                payload={"victim": target}
+                payload=payload
             )
             await self.client.send_message(action_msg)
             print(f"[{self.player_id}] Target selected: {target}")
+
+    async def _handle_seer_result(self, message: Message):
+        target = message.payload.get("target")
+        result = "a WEREWOLF" if message.payload.get("is_werewolf") else "not a werewolf"
+        print(f"\n[{self.player_id}] Seer result: {target} is {result}.")
 
     async def _handle_vote(self, message: Message):
         """Handle voting request."""

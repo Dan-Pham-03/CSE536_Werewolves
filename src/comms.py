@@ -32,6 +32,7 @@ class MessageType(Enum):
     PHASE_CHANGE = "PHASE_CHANGE"      # Night/Day phase change
     ROLE_ASSIGNMENT = "ROLE_ASSIGNMENT" # Assign role to player
     NIGHT_ACTION = "NIGHT_ACTION"      # Werewolf/special role action
+    SEER_RESULT = "SEER_RESULT"        # Private investigation result
     VOTE = "VOTE"                      # Player vote during day
     ELIMINATE = "ELIMINATE"            # Player eliminated result
     WIN = "WIN"                        # Game end message

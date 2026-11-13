@@ -6,7 +6,6 @@
     "roles": {
       "werewolf": 1,
       "villager": 2,
-      "doctor": 0,
       "seer": 1
     },
     "phase_durations": {

@@ -15,13 +15,13 @@ from typing import Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from comms import UDSServer, Message, MessageType
-from game_logic import GameState, GamePhase, PlayerRole
+from game_logic import GameState, GamePhase, PlayerRole, calculate_role_counts
 
 
 class WerewolvesGameServer:
     """Main game server orchestrating the Werewolves game."""
 
-    def __init__(self, socket_path: str, num_players: int = 4, num_werewolves: int = 1, log_dir: str = "logs", interactive: bool = False):
+    def __init__(self, socket_path: str, num_players: int = 4, num_werewolves: Optional[int] = None, log_dir: str = "logs", interactive: bool = False):
         """
         Initialize the game server.
 
@@ -34,11 +34,12 @@ class WerewolvesGameServer:
         """
         self.socket_path = socket_path
         self.num_players = num_players
-        self.num_werewolves = num_werewolves
+        role_counts = calculate_role_counts(num_players, num_werewolves)
+        self.num_werewolves = role_counts.werewolves
         self.interactive = interactive
         self.action_timeout = 120
         self.discussion_seconds = 30
-        self.game_state = GameState(num_werewolves=num_werewolves)
+        self.game_state = GameState(num_werewolves=self.num_werewolves)
         self.log_dir = log_dir
         self._expected_night_actions = set()
         self._received_night_actions = set()
@@ -118,16 +119,45 @@ class WerewolvesGameServer:
                 self._votes_complete.set()
 
     async def _handle_night_action(self, message: Message):
-        """Handle werewolf night action."""
-        werewolf_id = message.sender
-        victim_id = message.payload.get("victim")
+        """Handle a Werewolf attack or a Seer investigation."""
+        player = self.game_state.players.get(message.sender)
+        if (
+            not player
+            or not player.is_alive
+            or self.game_state.phase != GamePhase.NIGHT
+            or message.sender not in self._expected_night_actions
+            or message.sender in self._received_night_actions
+        ):
+            return
 
-        self.logger.debug(f"Werewolf {werewolf_id} targets {victim_id} for elimination")
-        self.game_state.record_night_action(werewolf_id, victim_id)
-        if self.interactive and werewolf_id in self._expected_night_actions:
-            self._received_night_actions.add(werewolf_id)
-            if self._expected_night_actions.issubset(self._received_night_actions):
-                self._night_actions_complete.set()
+        if player.role == PlayerRole.SEER and message.payload.get("action") == "investigate":
+            target_id = message.payload.get("target")
+            target = self.game_state.players.get(target_id)
+            if not target or not target.is_alive or target_id == player.player_id:
+                return
+
+            result = Message(
+                msg_type=MessageType.SEER_RESULT.value,
+                sender="SERVER",
+                recipient=player.player_id,
+                payload={"target": target_id, "is_werewolf": target.role == PlayerRole.WEREWOLF}
+            )
+            await self.comm_server.send_message(result)
+            self.logger.info(f"Seer {player.player_id} investigated a player")
+        elif player.role == PlayerRole.WEREWOLF:
+            victim_id = message.payload.get("victim")
+            victim = self.game_state.players.get(victim_id)
+            if not victim or not victim.is_alive or victim.role == PlayerRole.WEREWOLF:
+                return
+
+            self.logger.debug(f"Werewolf {player.player_id} targets {victim_id} for elimination")
+            self.game_state.record_night_action(player.player_id, victim_id)
+        else:
+            return
+
+        self._received_night_actions.add(player.player_id)
+        if self._expected_night_actions.issubset(self._received_night_actions):
+            self._night_actions_complete.set()
 
     async def start_game(self):
         """Start the game."""
@@ -185,8 +215,14 @@ class WerewolvesGameServer:
 
         # Ask werewolves for their targets
         werewolves = self.game_state.get_alive_werewolves()
+        seers = [
+            player for player in self.game_state.get_alive_players()
+            if player.role == PlayerRole.SEER
+        ]
         alive_villagers = self.game_state.get_alive_villagers()
-        self._expected_night_actions = {player.player_id for player in werewolves}
+        self._expected_night_actions = {
+            player.player_id for player in werewolves + seers
+        }
         self._received_night_actions.clear()
         self._night_actions_complete.clear()
 
@@ -198,6 +234,22 @@ class WerewolvesGameServer:
                 payload={
                     "action": "select_victim",
                     "available_targets": [p.player_id for p in alive_villagers]
+                }
+            )
+            await self.comm_server.send_message(action_msg)
+
+        for seer in seers:
+            action_msg = Message(
+                msg_type=MessageType.NIGHT_ACTION.value,
+                sender="SERVER",
+                recipient=seer.player_id,
+                payload={
+                    "action": "investigate",
+                    "available_targets": [
+                        player.player_id
+                        for player in self.game_state.get_alive_players()
+                        if player.player_id != seer.player_id
+                    ]
                 }
             )
             await self.comm_server.send_message(action_msg)
@@ -351,11 +403,16 @@ async def main():
     parser = argparse.ArgumentParser(description="Werewolves Game Server")
     parser.add_argument("--socket", default="sockets/game_server.sock", help="Socket path")
     parser.add_argument("--players", type=int, default=4, help="Number of players")
-    parser.add_argument("--werewolves", type=int, default=1, help="Number of werewolves")
+    parser.add_argument("--werewolves", type=int, default=None, help="Number of werewolves (defaults to one per four players)")
     parser.add_argument("--log-dir", default="logs", help="Log directory")
     parser.add_argument("--interactive", action="store_true", help="Allow discussion and wait for player choices")
 
     args = parser.parse_args()
+
+    try:
+        calculate_role_counts(args.players, args.werewolves)
+    except ValueError as error:
+        parser.error(str(error))
 
     server = WerewolvesGameServer(
         socket_path=args.socket,
