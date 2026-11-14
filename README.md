@@ -1,4 +1,4 @@
-﻿# Werewolves Game - Unix Domain Sockets Implementation
+# Werewolves Game - Unix Domain Sockets Implementation
 
 A Python-based implementation of the Werewolves (Mafia) game using Unix Domain Sockets for inter-process communication. Each player runs as an independent process and communicates with a central game server through a sophisticated IPC primitive.
 
