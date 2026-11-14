@@ -7,10 +7,11 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Optional
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.dirname(__file__))
 
 from comms import UDSServer, Message, MessageType
 from game_logic import GameState, GamePhase, PlayerRole, calculate_role_counts
@@ -54,7 +55,7 @@ class WerewolvesGameServer:
         self.comm_server = UDSServer(
             socket_path=socket_path,
             max_connections=num_players + 1,
-            log_file=os.path.join(log_dir, "comms.log")
+            log_file=str(Path(log_dir) / "comms.log")
         )
 
         # Register message handlers
@@ -66,7 +67,7 @@ class WerewolvesGameServer:
         logger.setLevel(logging.DEBUG)
 
         # File handler
-        fh = logging.FileHandler(os.path.join(self.log_dir, "game.log"))
+        fh = logging.FileHandler(Path(self.log_dir) / "game.log")
         fh.setLevel(logging.DEBUG)
 
         # Console handler
@@ -90,6 +91,33 @@ class WerewolvesGameServer:
         self.comm_server.register_handler(MessageType.HELLO.value, self._handle_hello)
         self.comm_server.register_handler(MessageType.VOTE.value, self._handle_vote)
         self.comm_server.register_handler(MessageType.NIGHT_ACTION.value, self._handle_night_action)
+        self.comm_server.register_handler(MessageType.CHAT.value, self._handle_chat)
+
+    async def _handle_chat(self, message: Message):
+        """Relay discussion only to the appropriate living players."""
+        player = self.game_state.players.get(message.sender)
+        text = message.payload.get("text")
+        if not player or not player.is_alive or not isinstance(text, str) or not text.strip() or len(text) > 500:
+            self.logger.warning("Rejected invalid chat from %s", message.sender)
+            return
+
+        if self.game_state.phase in (GamePhase.DAY, GamePhase.VOTING):
+            recipients = self.game_state.get_alive_players()
+            channel = "day"
+        elif self.game_state.phase == GamePhase.NIGHT and player.role == PlayerRole.WEREWOLF:
+            recipients = self.game_state.get_alive_werewolves()
+            channel = "werewolves"
+        else:
+            self.logger.warning("Rejected chat from %s in %s", message.sender, self.game_state.phase.value)
+            return
+
+        for recipient in recipients:
+            await self.comm_server.send_message(Message(
+                msg_type=MessageType.CHAT.value,
+                sender=message.sender,
+                recipient=recipient.player_id,
+                payload={"channel": channel, "text": text.strip()},
+            ))
 
     async def _handle_hello(self, message: Message):
         """Handle player connection."""
@@ -161,7 +189,7 @@ class WerewolvesGameServer:
                 payload={"target": target_id, "is_werewolf": target.role == PlayerRole.WEREWOLF}
             )
             await self.comm_server.send_message(result)
-            self.logger.info(f"Seer {player.player_id} investigated a player")
+            self.logger.debug(f"Seer {player.player_id} investigated a player")
         elif (
             player.role == PlayerRole.WEREWOLF
             and message.payload.get("action") == "select_victim"
@@ -207,7 +235,7 @@ class WerewolvesGameServer:
                 }
             )
             await self.comm_server.send_message(role_msg)
-            self.logger.info(f"Assigned role {player.role.value} to {player_id}")
+            self.logger.debug(f"Assigned role {player.role.value} to {player_id}")
 
         # Start game loop
         asyncio.create_task(self.game_loop())
@@ -237,9 +265,6 @@ class WerewolvesGameServer:
         """Execute night phase."""
         self.logger.info(f"--- NIGHT {self.game_state.current_round} ---")
 
-        # Notify all players that night has begun
-        await self._broadcast_phase_change("NIGHT")
-
         # Ask werewolves for their targets
         werewolves = self.game_state.get_alive_werewolves()
         seers = [
@@ -252,6 +277,8 @@ class WerewolvesGameServer:
         }
         self._received_night_actions.clear()
         self._night_actions_complete.clear()
+
+        await self._broadcast_phase_change("NIGHT")
 
         for werewolf in werewolves:
             action_msg = Message(
@@ -294,8 +321,14 @@ class WerewolvesGameServer:
             await asyncio.sleep(5)
 
         # Resolve night actions
+        previously_eliminated = len(self.game_state.eliminated_players)
         self.game_state.resolve_night_actions()
-        self.logger.info(f"Eliminated: {list(self.game_state.night_actions.values()) if self.game_state.night_actions else 'None'}")
+        victims = self.game_state.eliminated_players[previously_eliminated:]
+        if victims:
+            await self._broadcast_elimination(victims[0], "night")
+            self.logger.info("Player %s was killed during the night", victims[0])
+        else:
+            self.logger.info("No player was killed during the night")
 
         # Transition to day phase
         self.game_state.phase = GamePhase.DAY
@@ -322,6 +355,8 @@ class WerewolvesGameServer:
         self._expected_votes = {player.player_id for player in alive_players}
         self._received_votes.clear()
         self._votes_complete.clear()
+
+        await self._broadcast_phase_change("VOTING")
 
         # Ask all alive players to vote
         for player in alive_players:
@@ -354,6 +389,7 @@ class WerewolvesGameServer:
 
     async def results_phase(self):
         """Execute results phase."""
+        await self._broadcast_phase_change("RESULTS")
         most_voted = self.game_state.get_most_voted()
 
         if most_voted:
@@ -362,20 +398,24 @@ class WerewolvesGameServer:
         else:
             self.logger.info("No clear vote result")
 
-        # Broadcast elimination
+        await self._broadcast_elimination(most_voted, "vote")
+
+        self.game_state.current_round += 1
+        self.game_state.phase = GamePhase.NIGHT
+
+    async def _broadcast_elimination(self, player_id: Optional[str], cause: str):
+        """Announce an elimination, including its cause."""
         elim_msg = Message(
             msg_type=MessageType.ELIMINATE.value,
             sender="SERVER",
             recipient="*",
             payload={
-                "eliminated": most_voted,
-                "round": self.game_state.current_round
+                "eliminated": player_id,
+                "round": self.game_state.current_round,
+                "cause": cause,
             }
         )
         await self.comm_server.send_message(elim_msg)
-
-        self.game_state.current_round += 1
-        self.game_state.phase = GamePhase.NIGHT
 
     async def end_game(self, winner: str):
         """End the game."""

@@ -267,8 +267,8 @@ tail -f logs/player_1.log  # Watch specific player
 ### Phases
 
 1. **SETUP** - Server assigns roles randomly to all players
-2. **NIGHT** - Werewolves select a victim; the Seer investigates one living player and privately learns whether they are a werewolf
-3. **DAY** - All players are notified of elimination results (broadcast)
+2. **NIGHT** - Living werewolves can chat privately and select a victim; the Seer investigates one living player and privately learns whether they are a werewolf
+3. **DAY** - Night deaths are announced and living players can discuss
 4. **VOTING** - All alive players are asked to vote (unicast vote requests to each player)
 5. **RESULTS** - Vote result is announced (broadcast elimination)
 6. Loop back to NIGHT until win condition met
@@ -283,7 +283,9 @@ tail -f logs/player_1.log  # Watch specific player
 
 The role calculator requires at least 4 players, assigns one Seer, and fills the remaining slots with villagers. Werewolves default to one per four players, rounded down with a minimum of one (for example, 1 at 4-7 players and 2 at 8-11). An explicit `--werewolves` value may lower that count but cannot exceed the calculated limit.
 
-In interactive games, run the server and each player in separate terminals with `--interactive`. Only the Seer terminal receives the investigation result. Broadcast game-state updates omit player roles so hidden assignments remain private during play. The final game-over message includes the complete state, including roles.
+In interactive games, run the server and each player in separate terminals with `--interactive`. Enter a listed player ID to select a target or vote. Type `/chat your message` to talk to living players during day and voting, or to living werewolves during night. Messages are limited to 500 characters. Dead players cannot chat or vote. Night ends when all required actions are submitted (or after the 120-second timeout), so werewolves should discuss before selecting targets. Day discussion lasts 30 seconds; voting also has a 120-second timeout. Phase changes and deaths are announced in each terminal, while detailed logs remain in the log directory.
+
+Only the Seer terminal receives the investigation result. Broadcast game-state updates omit player roles so hidden assignments remain private during play. The final game-over message includes the complete state, including roles.
 
 ## Communication Patterns
 

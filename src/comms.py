@@ -32,6 +32,7 @@ class MessageType(Enum):
     NIGHT_ACTION = "NIGHT_ACTION"      # Werewolf/special role action
     SEER_RESULT = "SEER_RESULT"        # Private investigation result
     VOTE = "VOTE"                      # Player vote during day
+    CHAT = "CHAT"                      # Phase-scoped player discussion
     ELIMINATE = "ELIMINATE"            # Player eliminated result
     WIN = "WIN"                        # Game end message
     ERROR = "ERROR"                    # Error notification
@@ -155,10 +156,17 @@ class UDSServer:
                 message = Message.from_json(message_str)
 
                 # Store client ID from first HELLO message
-                if message.msg_type == MessageType.HELLO.value and client_id is None:
+                if message.msg_type == MessageType.HELLO.value:
+                    if client_id is not None or not message.sender or message.sender in self.clients:
+                        self.logger.warning("Rejected duplicate or empty client ID: %r", message.sender)
+                        break
                     client_id = message.sender
                     self.clients[client_id] = writer
                     self.logger.info(f"Client connected: {client_id}")
+
+                if client_id is None or message.sender != client_id:
+                    self.logger.warning("Rejected message with invalid sender: %r", message.sender)
+                    break
 
                 # Call registered handler
                 if message.msg_type in self.message_handlers:
