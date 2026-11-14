@@ -5,7 +5,6 @@ A Python-based implementation of the Werewolves (Mafia) game using Unix Domain S
 ## Quick Start
 
 ```
-cd werewolves-uds
 pip3 install -r requirements.txt
 make run
 ```
