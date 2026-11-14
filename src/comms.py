@@ -16,11 +16,9 @@ import json
 import logging
 import os
 import socket
-import sys
 from dataclasses import dataclass, asdict
 from enum import Enum
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Any
+from typing import Any, Callable, Dict, Optional
 from datetime import datetime
 
 
@@ -48,7 +46,7 @@ class Message:
     sender: str
     recipient: str  # "*" for broadcast, player_id for unicast
     payload: Dict[str, Any]
-    timestamp: str = None
+    timestamp: Optional[str] = None
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -120,11 +118,15 @@ class UDSServer:
 
     async def accept_connections(self):
         """Accept incoming client connections."""
+        server_socket = self.server_socket
+        if server_socket is None:
+            raise RuntimeError("Server must be started before accepting connections")
+
         loop = asyncio.get_event_loop()
 
         while True:
             try:
-                client_socket, _ = await loop.sock_accept(self.server_socket)
+                client_socket, _ = await loop.sock_accept(server_socket)
                 client_socket.setblocking(False)
                 asyncio.create_task(self._handle_client(client_socket))
             except Exception as e:
@@ -134,6 +136,7 @@ class UDSServer:
     async def _handle_client(self, client_socket: socket.socket):
         """Handle a single client connection."""
         client_id = None
+        writer: Optional[asyncio.StreamWriter] = None
         try:
             # Create reader/writer from raw socket
             reader, writer = await asyncio.open_connection(sock=client_socket)
@@ -169,11 +172,12 @@ class UDSServer:
             if client_id and client_id in self.clients:
                 del self.clients[client_id]
                 self.logger.info(f"Client disconnected: {client_id}")
-            try:
-                writer.close()
-                await writer.wait_closed()
-            except:
-                pass
+            if writer is not None:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception as e:
+                    self.logger.error(f"Error closing client {client_id}: {e}")
 
     def register_handler(self, msg_type: str, handler: Callable):
         """Register a handler for a specific message type."""
@@ -326,16 +330,20 @@ class UDSClient:
     async def _receive_loop(self):
         """Listen for incoming messages from server."""
         try:
+            reader = self.reader
+            if reader is None:
+                raise RuntimeError("Client is not connected")
+
             while True:
                 # Read message length (4 bytes)
-                length_data = await self.reader.readexactly(4)
+                length_data = await reader.readexactly(4)
                 if not length_data:
                     break
 
                 msg_length = int.from_bytes(length_data, byteorder='big')
 
                 # Read message data
-                data = await self.reader.readexactly(msg_length)
+                data = await reader.readexactly(msg_length)
                 message_str = data.decode('utf-8')
                 message = Message.from_json(message_str)
 

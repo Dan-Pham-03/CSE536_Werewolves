@@ -206,3 +206,10 @@ class GameState:
             "num_alive": len(self.get_alive_players()),
             "num_werewolves": len(self.get_alive_werewolves())
         }
+
+    def to_public_dict(self) -> Dict:
+        """Convert game state to a player-safe view without hidden roles."""
+        state = self.to_dict()
+        for player in state["players"].values():
+            del player["role"]
+        return state

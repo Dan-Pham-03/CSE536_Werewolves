@@ -4,11 +4,9 @@ Central coordinator managing game flow, player connections, and state synchroniz
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import Optional
 
 # Add src directory to path for imports
@@ -111,10 +109,26 @@ class WerewolvesGameServer:
         voter_id = message.sender
         votee_id = message.payload.get("vote_for")
 
+        voter = self.game_state.players.get(voter_id)
+        votee = self.game_state.players.get(votee_id) if isinstance(votee_id, str) else None
+        if (
+            self.game_state.phase != GamePhase.VOTING
+            or not voter
+            or not voter.is_alive
+            or voter_id not in self._expected_votes
+            or voter_id in self._received_votes
+            or not isinstance(votee_id, str)
+            or not votee
+            or not votee.is_alive
+            or votee_id == voter_id
+        ):
+            self.logger.warning("Rejected invalid vote from %s for %r", voter_id, votee_id)
+            return
+
         self.logger.debug(f"Player {voter_id} votes for {votee_id}")
         self.game_state.record_vote(voter_id, votee_id)
+        self._received_votes.add(voter_id)
         if self.interactive and voter_id in self._expected_votes:
-            self._received_votes.add(voter_id)
             if self._expected_votes.issubset(self._received_votes):
                 self._votes_complete.set()
 
@@ -132,8 +146,12 @@ class WerewolvesGameServer:
 
         if player.role == PlayerRole.SEER and message.payload.get("action") == "investigate":
             target_id = message.payload.get("target")
+            if not isinstance(target_id, str):
+                self.logger.warning("Rejected invalid Seer target from %s", player.player_id)
+                return
             target = self.game_state.players.get(target_id)
             if not target or not target.is_alive or target_id == player.player_id:
+                self.logger.warning("Rejected invalid Seer target from %s", player.player_id)
                 return
 
             result = Message(
@@ -144,10 +162,17 @@ class WerewolvesGameServer:
             )
             await self.comm_server.send_message(result)
             self.logger.info(f"Seer {player.player_id} investigated a player")
-        elif player.role == PlayerRole.WEREWOLF:
+        elif (
+            player.role == PlayerRole.WEREWOLF
+            and message.payload.get("action") == "select_victim"
+        ):
             victim_id = message.payload.get("victim")
+            if not isinstance(victim_id, str):
+                self.logger.warning("Rejected invalid Werewolf target from %s", player.player_id)
+                return
             victim = self.game_state.players.get(victim_id)
             if not victim or not victim.is_alive or victim.role == PlayerRole.WEREWOLF:
+                self.logger.warning("Rejected invalid Werewolf target from %s", player.player_id)
                 return
 
             self.logger.debug(f"Werewolf {player.player_id} targets {victim_id} for elimination")
@@ -169,6 +194,8 @@ class WerewolvesGameServer:
 
         # Notify players of their roles
         for player_id, player in self.game_state.players.items():
+            if player.role is None:
+                raise RuntimeError(f"Role assignment missing for player {player_id}")
             role_msg = Message(
                 msg_type=MessageType.ROLE_ASSIGNMENT.value,
                 sender="SERVER",
@@ -386,7 +413,7 @@ class WerewolvesGameServer:
             msg_type=MessageType.GAME_STATE.value,
             sender="SERVER",
             recipient="*",
-            payload=self.game_state.to_dict()
+            payload=self.game_state.to_public_dict()
         )
         await self.comm_server.send_message(msg)
 

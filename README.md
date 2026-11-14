@@ -283,7 +283,7 @@ tail -f logs/player_1.log  # Watch specific player
 
 The role calculator requires at least 4 players, assigns one Seer, and fills the remaining slots with villagers. Werewolves default to one per four players, rounded down with a minimum of one (for example, 1 at 4-7 players and 2 at 8-11). An explicit `--werewolves` value may lower that count but cannot exceed the calculated limit.
 
-In interactive games, run the server and each player in separate terminals with `--interactive`. Only the Seer terminal receives the investigation result.
+In interactive games, run the server and each player in separate terminals with `--interactive`. Only the Seer terminal receives the investigation result. Broadcast game-state updates omit player roles so hidden assignments remain private during play. The final game-over message includes the complete state, including roles.
 
 ## Communication Patterns
 

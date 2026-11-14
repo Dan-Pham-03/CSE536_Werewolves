@@ -8,9 +8,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from comms import Message, MessageType
+from comms import Message, MessageType, UDSServer
 from game_logic import GamePhase, GameState, PlayerRole, calculate_role_counts
 from game_server import WerewolvesGameServer
+
+
+class FakeComms(UDSServer):
+    def __init__(self):
+        self.messages: list[Message] = []
+
+    async def send_message(self, message: Message) -> None:
+        self.messages.append(message)
 
 
 def test_role_calculator_produces_balanced_rosters():
@@ -48,13 +56,6 @@ def test_role_assignment_matches_calculated_counts():
 
 
 def test_seer_result_is_sent_only_to_the_seer():
-    class FakeComms:
-        def __init__(self):
-            self.messages = []
-
-        async def send_message(self, message):
-            self.messages.append(message)
-
     async def run_scenario():
         server = WerewolvesGameServer.__new__(WerewolvesGameServer)
         server.game_state = GameState()
@@ -82,5 +83,71 @@ def test_seer_result_is_sent_only_to_the_seer():
         assert result.recipient == "seer"
         assert result.payload == {"target": "wolf", "is_werewolf": True}
         assert server._night_actions_complete.is_set()
+
+    asyncio.run(run_scenario())
+
+
+def test_broadcast_game_state_does_not_expose_player_roles():
+    async def run_scenario():
+        server = WerewolvesGameServer.__new__(WerewolvesGameServer)
+        server.game_state = GameState()
+        server.game_state.add_player("seer")
+        server.game_state.add_player("wolf")
+        server.game_state.players["seer"].role = PlayerRole.SEER
+        server.game_state.players["wolf"].role = PlayerRole.WEREWOLF
+        server.comm_server = FakeComms()
+
+        await server._broadcast_game_state()
+
+        assert len(server.comm_server.messages) == 1
+        state_message = server.comm_server.messages[0]
+        assert state_message.msg_type == MessageType.GAME_STATE.value
+        assert state_message.recipient == "*"
+        assert all(
+            "role" not in player
+            for player in state_message.payload["players"].values()
+        )
+        assert server.game_state.to_dict()["players"]["wolf"]["role"] == "WEREWOLF"
+
+    asyncio.run(run_scenario())
+
+
+def test_vote_handler_rejects_malformed_and_duplicate_votes():
+    async def run_scenario():
+        server = WerewolvesGameServer.__new__(WerewolvesGameServer)
+        server.game_state = GameState()
+        server.game_state.add_player("voter")
+        server.game_state.add_player("target_1")
+        server.game_state.add_player("target_2")
+        server.game_state.phase = GamePhase.VOTING
+        server._expected_votes = {"voter"}
+        server._received_votes = set()
+        server._votes_complete = asyncio.Event()
+        server.interactive = True
+        server.logger = logging.getLogger("test-game-server")
+
+        await server._handle_vote(Message(
+            msg_type=MessageType.VOTE.value,
+            sender="voter",
+            recipient="SERVER",
+            payload={},
+        ))
+        assert server.game_state.players["voter"].voted_for is None
+
+        await server._handle_vote(Message(
+            msg_type=MessageType.VOTE.value,
+            sender="voter",
+            recipient="SERVER",
+            payload={"vote_for": "target_1"},
+        ))
+        await server._handle_vote(Message(
+            msg_type=MessageType.VOTE.value,
+            sender="voter",
+            recipient="SERVER",
+            payload={"vote_for": "target_2"},
+        ))
+
+        assert server.game_state.players["voter"].voted_for == "target_1"
+        assert server._votes_complete.is_set()
 
     asyncio.run(run_scenario())
